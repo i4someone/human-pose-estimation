@@ -107,6 +107,7 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
     score = 0  # 分数
     start_time = None  # 游戏开始时间
     food_points = []  # 初始化为空，避免重复生成
+    countdown_time = 60  # 倒计时时间（秒）
 
     for img in image_provider:
         # 对捕获的图像进行水平翻转
@@ -155,7 +156,6 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
                             cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 0, 255))
 
             key_pose = pose.keypoints[0]  # 鼻子的关键点
-             # 添加一个小球跟随鼻子的关键点
 
             if key_pose[0] != -1 and key_pose[1] != -1:  # 确保关键点有效
                 cv2.circle(img, (int(key_pose[0]), int(key_pose[1])), 10, (255, 0, 0), -1)  # 绘制蓝色小球
@@ -175,7 +175,12 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
         for (x, y) in food_points:
             cv2.circle(img, (x, y), 15, (0, 0, 255), -1)  # 绘制食物
 
+        # 显示分数和倒计时
         cv2.putText(img, f'Score: {score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # 显示分数
+        cv2.putText(img, f'runtime:{running}', (700, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+        if running:
+            remaining_time = max(0, countdown_time - int(time.time() - start_time))  # 计算剩余时间
+            cv2.putText(img, f'Time Left: {remaining_time}s', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # 显示倒计时
 
         cv2.imshow('Lightweight Human Pose Estimation Python Demo', img)
         key = cv2.waitKey(delay)
@@ -194,7 +199,7 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
         elif key == ord('d'):  # 按下'd'键停止游戏
             running = False
 
-        if running and (time.time() - start_time) >= 60:  # 游戏运行60秒后停止
+        if running and (time.time() - start_time) >= countdown_time:  # 游戏运行倒计时结束后停止
             running = False
             print(f'Final Score: {score}')
 
