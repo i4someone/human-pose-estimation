@@ -6,6 +6,14 @@ import torch
 import time
 import random
 
+# 加载苹果图片
+apple_img = cv2.imread('material/apple.png', cv2.IMREAD_UNCHANGED)
+golden_apple_img = cv2.imread('material/golden.png', cv2.IMREAD_UNCHANGED)
+
+# 调整图片大小
+apple_img = cv2.resize(apple_img, (30, 30))
+golden_apple_img = cv2.resize(golden_apple_img, (30, 30))
+
 from models.with_mobilenet import PoseEstimationWithMobileNet
 from modules.keypoints import extract_keypoints, group_keypoints
 from modules.load_state import load_state
@@ -173,7 +181,13 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
                 food_points = generate_food()
 
         for (x, y) in food_points:
-            cv2.circle(img, (x, y), 15, (0, 0, 255), -1)  # 绘制食物
+            #cv2.circle(img, (x, y), 15, (0, 0, 255), -1)  # 绘制食物
+            # 替换为普通苹果图片
+            x, y = x-15, y-15
+            if x >=0 and y >=0 and x+30 <= img.shape[1] and y+30 <= img.shape[0]:
+                alpha = apple_img[:, :, 3] / 255.0
+                for c in range(3):
+                    img[y:y+30, x:x+30, c] = (1. - alpha) * img[y:y+30, x:x+30, c] + alpha * apple_img[:,:,c]
 
         # 显示分数和倒计时
         cv2.putText(img, f'Score: {score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # 显示分数
