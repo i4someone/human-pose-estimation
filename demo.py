@@ -11,8 +11,8 @@ apple_img = cv2.imread('material/apple.png', cv2.IMREAD_UNCHANGED)
 golden_apple_img = cv2.imread('material/golden.png', cv2.IMREAD_UNCHANGED)
 
 # 调整图片大小
-apple_img = cv2.resize(apple_img, (30, 30))
-golden_apple_img = cv2.resize(golden_apple_img, (30, 30))
+apple_img = cv2.resize(apple_img, (50, 50))
+golden_apple_img = cv2.resize(golden_apple_img, (50, 50))
 
 from models.with_mobilenet import PoseEstimationWithMobileNet
 from modules.keypoints import extract_keypoints, group_keypoints
@@ -92,7 +92,7 @@ def infer_fast(net, img, net_input_height_size, stride, upsample_ratio, cpu,
 # 生成随机数量的小圆
 def generate_food():
     num_points = random.randint(8, 20)
-    points = [(random.randint(0, 960), random.randint(0, 720)) for _ in range(num_points)]
+    points = [(random.randint(25, 935), random.randint(25, 695)) for _ in range(num_points)]  # 确保点在屏幕范围内
     return points
 
 ####################
@@ -168,26 +168,40 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
             if key_pose[0] != -1 and key_pose[1] != -1:  # 确保关键点有效
                 cv2.circle(img, (int(key_pose[0]), int(key_pose[1])), 10, (255, 0, 0), -1)  # 绘制蓝色小球
 
-        # 游戏逻辑
+        # 游戏逻辑，仅在游戏运行时执行
         if running:
-            new_food_points = []
-            for (x, y) in food_points:
-                if (x - key_pose[0])**2 + (y - key_pose[1])**2 > 500:  # 判断Pacman是否吃掉食物
-                    new_food_points.append((x, y))
+            remaining_food = []
+            for (fx, fy) in food_points:
+                food_eaten = False
+                for pose in current_poses:
+                    nose = pose.keypoints[0]  # 用鼻子作为检测点
+                    if nose[0] != -1 and nose[1] != -1:
+                        dist_sq = (fx - nose[0])**2 + (fy - nose[1])**2
+                        if dist_sq < 600:  # 若距离小于阈值，认为食物被吃掉
+                            score += 1   # 更新分数
+                            food_eaten = True
+                            break
+                if not food_eaten:
+                    remaining_food.append((fx, fy))
                 else:
-                    score += 1  # 更新分数
-            food_points = new_food_points
-            if not food_points:  # 如果所有食物被吃掉，生成新的食物
+                    print(f"Food eaten at: ({fx}, {fy})")  # 调试信息
+            food_points = remaining_food
+
+            # 如果所有食物都被吃掉，则生成新食物
+            if not food_points:
+                print("All food eaten, generating new food...")
                 food_points = generate_food()
 
-        for (x, y) in food_points:
-            #cv2.circle(img, (x, y), 15, (0, 0, 255), -1)  # 绘制食物
-            # 替换为普通苹果图片
-            x, y = x-15, y-15
-            if x >=0 and y >=0 and x+30 <= img.shape[1] and y+30 <= img.shape[0]:
+        #----- 绘制食物（苹果图片） -----
+        for (fx, fy) in food_points:
+            xp = int(fx - 25)
+            yp = int(fy - 25)
+            if xp >= 0 and yp >= 0 and xp+50 <= img.shape[1] and yp+50 <= img.shape[0]:
                 alpha = apple_img[:, :, 3] / 255.0
                 for c in range(3):
-                    img[y:y+30, x:x+30, c] = (1. - alpha) * img[y:y+30, x:x+30, c] + alpha * apple_img[:,:,c]
+                    img[yp:yp+50, xp:xp+50, c] = (1.0 - alpha) * img[yp:yp+50, xp:xp+50, c] + alpha * apple_img[:, :, c]
+            else:
+                print(f"Food point out of bounds: ({fx}, {fy})")  # 调试信息
 
         # 显示分数和倒计时
         cv2.putText(img, f'Score: {score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # 显示分数
