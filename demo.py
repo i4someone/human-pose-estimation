@@ -92,8 +92,11 @@ def infer_fast(net, img, net_input_height_size, stride, upsample_ratio, cpu,
 # 生成随机数量的小圆
 def generate_food():
     num_points = random.randint(8, 20)
-    points = [(random.randint(25, 935), random.randint(25, 695)) for _ in range(num_points)]  # 确保点在屏幕范围内
-    return points
+    points = [(random.randint(25, 935), random.randint(25, 695)) for _ in range(num_points)]  # 普通苹果
+    golden_apple = None
+    if random.random() < 0.3:  # 30%的概率生成金苹果
+        golden_apple = (random.randint(25, 935), random.randint(25, 695))
+    return points, golden_apple
 
 ####################
 
@@ -116,6 +119,7 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
     start_time = None  # 游戏开始时间
     food_points = []  # 初始化为空，避免重复生成
     countdown_time = 60  # 倒计时时间（秒）
+    golden_apple = None  # 初始化金苹果变量
 
     for img in image_provider:
         # 对捕获的图像进行水平翻转
@@ -171,6 +175,7 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
         # 游戏逻辑，仅在游戏运行时执行
         if running:
             remaining_food = []
+            golden_eaten = False  # 标记金苹果是否被吃掉
             for (fx, fy) in food_points:
                 food_eaten = False
                 for pose in current_poses:
@@ -178,7 +183,7 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
                     if nose[0] != -1 and nose[1] != -1:
                         dist_sq = (fx - nose[0])**2 + (fy - nose[1])**2
                         if dist_sq < 600:  # 若距离小于阈值，认为食物被吃掉
-                            score += 1   # 更新分数
+                            score += 1   # 普通苹果得分
                             food_eaten = True
                             break
                 if not food_eaten:
@@ -187,10 +192,24 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
                     print(f"Food eaten at: ({fx}, {fy})")  # 调试信息
             food_points = remaining_food
 
+            # 检测金苹果是否被吃掉
+            if golden_apple:
+                for pose in current_poses:
+                    nose = pose.keypoints[0]
+                    if nose[0] != -1 and nose[1] != -1:
+                        dist_sq = (golden_apple[0] - nose[0])**2 + (golden_apple[1] - nose[1])**2
+                        if dist_sq < 600:  # 若距离小于阈值，认为金苹果被吃掉
+                            score += 5  # 金苹果得分更高
+                            golden_eaten = True
+                            print(f"Golden apple eaten at: {golden_apple}")  # 调试信息
+                            break
+                if golden_eaten:
+                    golden_apple = None  # 移除金苹果
+
             # 如果所有食物都被吃掉，则生成新食物
-            if not food_points:
+            if not food_points and not golden_apple:
                 print("All food eaten, generating new food...")
-                food_points = generate_food()
+                food_points, golden_apple = generate_food()
 
         #----- 绘制食物（苹果图片） -----
         for (fx, fy) in food_points:
@@ -202,6 +221,18 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
                     img[yp:yp+50, xp:xp+50, c] = (1.0 - alpha) * img[yp:yp+50, xp:xp+50, c] + alpha * apple_img[:, :, c]
             else:
                 print(f"Food point out of bounds: ({fx}, {fy})")  # 调试信息
+
+        #----- 绘制金苹果 -----
+        if golden_apple:
+            gx, gy = golden_apple
+            xg = int(gx - 25)
+            yg = int(gy - 25)
+            if xg >= 0 and yg >= 0 and xg+50 <= img.shape[1] and yg+50 <= img.shape[0]:
+                alpha = golden_apple_img[:, :, 3] / 255.0
+                for c in range(3):
+                    img[yg:yg+50, xg:xg+50, c] = (1.0 - alpha) * img[yg:yg+50, xg:xg+50, c] + alpha * golden_apple_img[:, :, c]
+            else:
+                print(f"Golden apple point out of bounds: ({gx}, {gy})")
 
         # 显示分数和倒计时
         cv2.putText(img, f'Score: {score}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)  # 显示分数
@@ -223,7 +254,7 @@ def run_demo(net, image_provider, height_size, cpu, track, smooth):
             running = True
             start_time = time.time()
             score = 0
-            food_points = generate_food()  # 游戏开始时生成食物
+            food_points, golden_apple = generate_food()  # 游戏开始时生成食物
         elif key == ord('d'):  # 按下'd'键停止游戏
             running = False
 
